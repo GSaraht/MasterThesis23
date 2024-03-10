@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Protected Areas Map</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""/>
+
+    <!--[the href: to execute buttons, category-->
+    <!--<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet-timedimension@1.1.0/dist/leaflet.timedimension.min.css"/>-->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet-timedimension@1.1.0/dist/leaflet.timedimension.min.js"></script>
+    
+    <!--[Slider control]-->
+    <link rel="stylesheet" href="http://cdn.leafletjs.com/leaflet-0.7.2/leaflet.css" />
+    <link rel="stylesheet" href="http://code.jquery.com/ui/1.9.2/themes/base/jquery-ui.css" type="text/css">
+        
+    <script type="text/javascript" src="anzpsea_pol.geojson.js"></script> 
+    <script type="text/javascript" src="test.geojson.js"></script> 
+    <style>
+        #map { height: 580px; }
+        #basemap-buttons { position: absolute; border-bottom: 10px; right: 10px; z-index: 1000; }
+        button { margin-bottom: 5px; }
+        #category-selector { position: absolute; border-bottom: 10px; left: 10px; z-index: 1000; }
+    </style>
+</head>
+<body>
+    <!-- Include this library for mobile touch support  -->
+    <script src="http://cdn.leafletjs.com/leaflet-0.7.2/leaflet.js"></script>
+    <script src="http://code.jquery.com/jquery-1.9.1.min.js"></script>
+    <script src="http://code.jquery.com/ui/1.9.2/jquery-ui.js"></script>
+    <!-- Include this library for mobile touch support  -->
+    <script src="http://cdnjs.cloudflare.com/ajax/libs/jqueryui-touch-punch/0.2.2/jquery.ui.touch-punch.min.js"></script>
+    <script src="SliderControl.js"></script>
+
+    <div id="map"></div>
+    <div id="basemap-buttons">
+        <button onclick="switchBasemap('OpenStreetMap')">OpenStreetMap</button>
+        <button onclick="switchBasemap('Esri_WorldImagery')">Esri World Imagery</button>
+    </div>
+    <div id="category-selector">
+        <label for="category">IUCN-Category:</label>
+        <select id="category" onchange="updateCategory()">
+            <option value="all">All Categories</option>
+            <option value="Ia">Ia</option>
+            <option value="Ib">Ib</option>
+            <option value="II">II</option>
+            <option value="III">III</option>
+            <option value="IV">IV</option>
+            <option value="V">V</option>
+            <option value="VI">VI</option>
+            <option value="Not applicable">Not applicable</option>
+            <option value="Not assigned">Not assigned</option>
+            <option value="Not reported">Not reported</option>
+        </select>
+    </div>
+    <script>
+        // -----MAP and BASEMAPS-------
+        var map = L.map('map').setView([0, 0], 3);
+
+        var openStreetMapLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+        }).addTo(map);
+
+        var esriWorldImageryLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+        });
+
+        var currentBasemap = openStreetMapLayer;
+
+        var switchBasemap = function(basemap) {
+            currentBasemap.remove();
+            
+            if (basemap === 'OpenStreetMap') {
+                openStreetMapLayer.addTo(map);
+                currentBasemap = openStreetMapLayer;
+            } else if (basemap === 'Esri_WorldImagery') {
+                esriWorldImageryLayer.addTo(map);
+                currentBasemap = esriWorldImageryLayer;
+            }
+        };
+
+        var layerGroup = L.layerGroup().addTo(map);
+
+        var sliderControl = null;
+
+        // regions refers to geometries
+        var regions = geojson.features; 
+
+        // Add all geometries to the layerGroup initially
+        regions.forEach((region) => {
+            L.geoJson(region, {
+                style: function (feature) {
+                    return getFeatureStyle(feature);
+                },
+                onEachFeature: function (feature, layer) {
+                    var name = feature.properties.NAME;
+                    if (name) {
+                        layer.bindPopup('Name: ' + name);
+                    }
+                }
+            }).addTo(layerGroup);
+        });
+
+        // IUCN Category Selection
+        function updateCategory() {
+            var selectedCategory = document.getElementById('category').value;
+
+            layerGroup.clearLayers(); // Clear existing layers
+
+            // Add filtered regions to the layerGroup
+            regions.forEach((region) => {
+                var iucnCat = region.properties.IUCN_CAT;
+
+                if (selectedCategory === 'all' || iucnCat === selectedCategory) {
+                    L.geoJson(region, {
+                        style: function (feature) {
+                            return getFeatureStyle(feature);
+                        },
+                        onEachFeature: function (feature, layer) {
+                            var name = feature.properties.NAME;
+                            if (name) {
+                                layer.bindPopup('Name: ' + name,);
+                            }
+                        }
+                    }).addTo(layerGroup);
+                }
+            });
+        }
+
+        // Add colors to geometries 
+        function getFeatureStyle(feature) {
+            var pa_def = feature.properties.PA_DEF;
+
+            if (pa_def == 0) {
+                return { color: 'yellow', fillColor: 'yellow' }; // OECM
+            } else {
+                var marine = feature.properties.MARINE;
+
+                if (marine == 0) {
+                    return { color: 'green', fillColor: 'green' }; // terrestrial PA
+                }
+                if (marine == 1) {
+                    return { color: 'orange', fillColor: 'orange' }; // coastal PA
+                }
+                if (marine == 2) {
+                    return { color: 'blue', fillColor: 'blue' }; // marine PA
+                }
+            }
+
+            // Default style
+            return { color: 'gray', fillColor: 'gray' };
+        }
+
+        var testlayer = L.geoJson(geojson);
+
+        var sliderControl = L.control.sliderControl({
+                position: "topright",
+                layer: testlayer,
+                range: false,
+                timeAttribute: "STATUS_YR"
+        });
+
+        map.addControl(sliderControl);
+
+        sliderControl.startSlider();
+
+
+
+    </script>
+</body>
+</html>
